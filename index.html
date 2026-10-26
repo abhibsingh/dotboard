@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dotboard</title>
+<meta name="description" content="A split flap dot matrix board with world clocks, a big clock, a countdown and your own sign.">
+<meta name="theme-color" content="#120d07">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dotboard">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a dark desk of device housings, each holding a dot matrix split flap board. The chosen skin recolors the whole room. */
+:root{
+  --page:#120d07; --bezel:#1d150c; --well:#0a0703; --face:#140e07;
+  --on:#ffb547; --off:#2a1d0e; --ui:#f1d7ae; --muted:#9b7f58; --line:#33261a;
+  --font-ui:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"Martian Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--page);color:var(--ui);font-family:var(--font-ui);transition:background .4s ease}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px;display:flex;flex-direction:column;gap:20px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0}
+.brand small{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.btn{font:500 13px var(--font-ui);color:var(--ui);background:transparent;border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;transition:border-color .2s,background .2s}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--on);color:var(--page);border-color:var(--on)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--on);outline-offset:2px}
+
+.desk{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:20px}
+.panel{background:var(--bezel);border-radius:14px;padding:14px 18px 22px;display:flex;flex-direction:column;gap:16px;min-width:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 22px 44px -28px rgba(0,0,0,.85)}
+.panel.wide{grid-column:1/-1}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.plabel{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plabel b{color:var(--ui);font-weight:500;margin-right:8px}
+.pbtn{font:500 10px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 11px;cursor:pointer;flex:none}
+.pbtn:hover{color:var(--ui);border-color:var(--muted)}
+.pbody{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0}
+.sep{width:60%;height:1px;border:0;background:var(--line);margin:2px 0}
+
+.board{display:grid;grid-template-columns:repeat(var(--cols),var(--cw,20px));gap:var(--g,2px);padding:calc(var(--g,2px) * 1.5);background:var(--well);border-radius:calc(var(--cw,20px) * .18);box-shadow:inset 0 2px 6px rgba(0,0,0,.35)}
+.cell{position:relative;width:var(--cw,20px);height:calc(var(--cw,20px) * 1.45);background:var(--face);border-radius:calc(var(--cw,20px) * .1);perspective:calc(var(--cw,20px) * 5)}
+.cell canvas.base{position:absolute;inset:0;width:100%;height:100%}
+.cell .flap{position:absolute;left:0;right:0;top:0;height:50%;overflow:hidden;transform-origin:50% 100%;background:var(--face);border-radius:calc(var(--cw,20px) * .1) calc(var(--cw,20px) * .1) 0 0;z-index:1}
+.cell .flap canvas{position:absolute;left:0;top:0;width:100%;height:200%}
+.cell::after{content:"";position:absolute;left:0;right:0;top:50%;height:max(1px,calc(var(--cw,20px) * .04));background:var(--well);transform:translateY(-50%);z-index:2;opacity:.9}
+
+.foot{font-size:13px;color:var(--muted);margin:0;line-height:1.5;max-width:70ch}
+
+body.focusing .top,body.focusing .foot{display:none}
+body.focusing .panel:not(.focused){display:none}
+.panel.focused{position:fixed;inset:0;z-index:40;border-radius:0;justify-content:center;background:var(--page);box-shadow:none;
+  padding:calc(env(safe-area-inset-top,0px) + 60px) max(24px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(24px,env(safe-area-inset-left,0px))}
+.panel.focused .phead{position:absolute;top:calc(env(safe-area-inset-top,0px) + 16px);left:max(24px,env(safe-area-inset-left,0px));right:max(24px,env(safe-area-inset-right,0px));opacity:.4;transition:opacity .3s}
+.panel.focused .phead:hover,.panel.focused .phead:focus-within{opacity:1}
+
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(400px,100%);box-sizing:border-box;background:var(--bezel);border-left:1px solid var(--line);z-index:60;transform:translateX(105%);transition:transform .28s ease;overflow-y:auto;
+  padding:calc(env(safe-area-inset-top,0px) + 18px) max(20px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 32px) 20px;display:flex;flex-direction:column;gap:26px}
+.drawer.open{transform:none}
+.dhead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.drawer h2{font:600 19px var(--font-ui);margin:0;color:var(--ui)}
+.drawer h3{font:500 10.5px var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.drawer section{min-width:0}
+.skins{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.swatch{border:1px solid var(--line);border-radius:10px;padding:7px 6px 8px;background:transparent;color:var(--ui);cursor:pointer;display:flex;flex-direction:column;align-items:stretch;gap:6px;font:500 11px var(--font-ui);text-align:center}
+.swatch i{display:block;height:30px;border-radius:6px;background-color:var(--sw-face);background-image:radial-gradient(circle,var(--sw-on) 1.5px,transparent 2.2px);background-size:7px 7px;background-position:center;box-shadow:inset 0 0 14px var(--sw-glow)}
+.swatch[aria-pressed="true"]{border-color:var(--on);box-shadow:0 0 0 1px var(--on)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:6px 16px;border-radius:999px;font:500 13px var(--font-ui);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--on);color:var(--page)}
+.row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:14px;cursor:pointer}
+.row input{accent-color:var(--on);width:16px;height:16px;margin:0}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);margin-bottom:12px}
+.drawer input[type=text],.drawer input[type=datetime-local],.drawer select,.drawer textarea{font:400 14px var(--font-ui);color:var(--ui);background:var(--face);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;box-sizing:border-box;min-width:0}
+.drawer textarea{font-family:var(--font-mono);font-size:12.5px;line-height:1.6;resize:vertical;text-transform:uppercase}
+.cities{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.cities li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.cities input{text-transform:uppercase;font-family:var(--font-mono)!important;font-size:12.5px!important}
+.cities .tz{font:400 10.5px var(--font-mono);color:var(--muted);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.x{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1}
+.x:hover{color:var(--ui);border-color:var(--muted)}
+.addrow{display:flex;gap:8px}
+.addrow select{flex:1}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0;line-height:1.5}
+@media (prefers-reduced-motion: reduce){.drawer,body{transition:none}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div id="mark"></div><small>World time · countdown · sign</small></div>
+    <button class="btn primary" id="openSettings" type="button">Customize</button>
+  </header>
+  <main class="desk" id="desk"></main>
+  <p class="foot">Double click any board or press Full screen to run it on a spare monitor or tablet. Your cities, countdown and messages are saved on this device.<br>Make it an app: on a Mac, open this page in Safari and choose File › Add to Dock. On iPhone or iPad, tap Share › Add to Home Screen.</p>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Customize" inert>
+  <div class="dhead"><h2>Customize</h2><button class="btn" id="closeSettings" type="button">Done</button></div>
+  <section><h3>Color</h3><div class="skins" id="skins"></div></section>
+  <section><h3>Board size</h3><div class="seg" id="sizes" role="group" aria-label="Board size"></div></section>
+  <section><h3>Clock</h3>
+    <label class="row"><input type="checkbox" id="h24"> 24 hour time</label>
+    <label class="row"><input type="checkbox" id="secs"> Show seconds</label>
+    <label class="row"><input type="checkbox" id="flip"> Flip animation</label>
+  </section>
+  <section><h3>World board</h3>
+    <ul class="cities" id="cityList"></ul>
+    <div class="addrow"><select id="cityPick" aria-label="City to add"></select><button class="btn" id="addCity" type="button">Add</button></div>
+    <p class="hint">Up to 8 cities. Rename any city; the board shows 10 letters.</p>
+  </section>
+  <section><h3>Countdown</h3>
+    <label class="field"><span>Event name</span><input type="text" id="cdLabel" maxlength="16"></label>
+    <label class="field"><span>Date and time</span><input type="datetime-local" id="cdAt"></label>
+  </section>
+  <section><h3>Sign</h3>
+    <label class="field"><span>Messages</span><textarea id="signText" rows="8"></textarea></label>
+    <p class="hint">Each message fits 3 lines of 16 letters. Leave a blank line between messages.</p>
+    <label class="field" style="margin-top:12px"><span>Change message every</span>
+      <select id="signEvery"><option value="0">Never</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option></select>
+    </label>
+  </section>
+</aside>
+
+<script>
+(() => {
+/* ---------- 5x7 dot font ---------- */
+const RAW = {
+' ':'00000 00000 00000 00000 00000 00000 00000',
+A:'01110 10001 10001 11111 10001 10001 10001', B:'11110 10001 10001 11110 10001 10001 11110',
+C:'01110 10001 10000 10000 10000 10001 01110', D:'11110 10001 10001 10001 10001 10001 11110',
+E:'11111 10000 10000 11110 10000 10000 11111', F:'11111 10000 10000 11110 10000 10000 10000',
+G:'01110 10001 10000 10111 10001 10001 01111', H:'10001 10001 10001 11111 10001 10001 10001',
+I:'01110 00100 00100 00100 00100 00100 01110', J:'00111 00010 00010 00010 00010 10010 01100',
+K:'10001 10010 10100 11000 10100 10010 10001', L:'10000 10000 10000 10000 10000 10000 11111',
+M:'10001 11011 10101 10101 10001 10001 10001', N:'10001 10001 11001 10101 10011 10001 10001',
+O:'01110 10001 10001 10001 10001 10001 01110', P:'11110 10001 10001 11110 10000 10000 10000',
+Q:'01110 10001 10001 10001 10101 10010 01101', R:'11110 10001 10001 11110 10100 10010 10001',
+S:'01111 10000 10000 01110 00001 00001 11110', T:'11111 00100 00100 00100 00100 00100 00100',
+U:'10001 10001 10001 10001 10001 10001 01110', V:'10001 10001 10001 10001 10001 01010 00100',
+W:'10001 10001 10001 10101 10101 10101 01010', X:'10001 10001 01010 00100 01010 10001 10001',
+Y:'10001 10001 10001 01010 00100 00100 00100', Z:'11111 00001 00010 00100 01000 10000 11111',
+'0':'01110 10001 10011 10101 11001 10001 01110', '1':'00100 01100 00100 00100 00100 00100 01110',
+'2':'01110 10001 00001 00010 00100 01000 11111', '3':'11111 00010 00100 00010 00001 10001 01110',
+'4':'00010 00110 01010 10010 11111 00010 00010', '5':'11111 10000 11110 00001 00001 10001 01110',
+'6':'00110 01000 10000 11110 10001 10001 01110', '7':'11111 00001 00010 00100 01000 01000 01000',
+'8':'01110 10001 10001 01110 10001 10001 01110', '9':'01110 10001 10001 01111 00001 00010 01100',
+':':'00000 01100 01100 00000 01100 01100 00000', '.':'00000 00000 00000 00000 00000 01100 01100',
+',':'00000 00000 00000 00000 01100 00100 01000', '-':'00000 00000 00000 11111 00000 00000 00000',
+'+':'00000 00100 00100 11111 00100 00100 00000', '/':'00000 00001 00010 00100 01000 10000 00000',
+'%':'11000 11001 00010 00100 01000 10011 00011', '!':'00100 00100 00100 00100 00100 00000 00100',
+'?':'01110 10001 00001 00010 00100 00000 00100', "'":'01100 00100 01000 00000 00000 00000 00000',
+'&':'01100 10010 10100 01000 10101 10010 01101', '@':'01110 10001 10111 10101 10111 10000 01110',
+'(':'00010 00100 01000 01000 01000 00100 00010', ')':'01000 00100 00010 00010 00010 00100 01000',
+'=':'00000 00000 11111 00000 11111 00000 00000', '<':'00010 00100 01000 10000 01000 00100 00010',
+'>':'01000 00100 00010 00001 00010 00100 01000', '*':'00000 00100 10101 01110 10101 00100 00000',
+'#':'01010 01010 11111 01010 11111 01010 01010', '·':'00000 00000 00000 00100 00000 00000 00000',
+'♥':'00000 01010 11111 11111 01110 00100 00000', '█':'11111 11111 11111 11111 11111 11111 11111'
+};
+const GLYPHS = {}; for (const k in RAW) GLYPHS[k] = RAW[k].replace(/ /g, '');
+const ORDER = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.,-+/%!?'&@()=<>*#·♥█";
+const ALIAS = {'—':'-','–':'-','’':"'",'‘':"'",'"':"'",'“':"'",'”':"'",'…':'.','•':'·',';':':','_':'-','|':'!','❤':'♥'};
+function norm(ch){
+  ch = (ch || ' ').toUpperCase()[0];
+  if (ch in GLYPHS) return ch;
+  if (ALIAS[ch]) return ALIAS[ch];
+  const d = ch.normalize('NFD')[0];
+  return d in GLYPHS ? d : '?';
+}
+
+/* ---------- skins ---------- */
+const SKINS = {
+  classic:{name:'Classic',page:'#101113',bezel:'#1a1c1f',well:'#08090a',face:'#121315',on:'#f4f1e8',off:'#202225',glow:'rgba(255,248,230,.55)',ui:'#e4e1d8',muted:'#86837b',line:'#2c2f33'},
+  black:{name:'True black',page:'#000000',bezel:'#0a0a0a',well:'#000000',face:'#050505',on:'#ececec',off:'#121212',glow:'rgba(255,255,255,.4)',ui:'#d6d6d6',muted:'#777777',line:'#1e1e1e'},
+  amber:{name:'Amber',page:'#120d07',bezel:'#1d150c',well:'#0a0703',face:'#140e07',on:'#ffb547',off:'#2a1d0e',glow:'rgba(255,150,40,.75)',ui:'#f1d7ae',muted:'#9b7f58',line:'#33261a'},
+  phosphor:{name:'Phosphor',page:'#07110b',bezel:'#0d1b12',well:'#030805',face:'#08130c',on:'#7dffa6',off:'#0f2617',glow:'rgba(70,255,130,.65)',ui:'#c9efd5',muted:'#5f8a6c',line:'#183424'},
+  ice:{name:'Ice',page:'#080d16',bezel:'#0f1724',well:'#04070c',face:'#0a101a',on:'#a8dcff',off:'#132236',glow:'rgba(110,190,255,.65)',ui:'#d3e6f7',muted:'#6884a3',line:'#1d2c42'},
+  red:{name:'Signal red',page:'#130707',bezel:'#1f0d0d',well:'#0a0303',face:'#150808',on:'#ff5546',off:'#2c0f0d',glow:'rgba(255,60,40,.75)',ui:'#f3cfc9',muted:'#9a6660',line:'#381a18'},
+  pastel:{name:'Pastel',page:'#1d1925',bezel:'#2a2433',well:'#14111a',face:'#1f1a27',on:'#ffc8e2',off:'#302839',glow:'rgba(255,170,215,.55)',ui:'#ecdff0',muted:'#9a8ca6',line:'#3b3346'},
+  paper:{name:'Paper',light:true,page:'#ece9e2',bezel:'#e0dcd2',well:'#c9c4b9',face:'#f4f2ec',on:'#22262b',off:'#dedad1',glow:'rgba(0,0,0,0)',ui:'#22262b',muted:'#6e6b64',line:'#cfcac0'}
+};
+let C = SKINS.amber;
+
+/* ---------- settings ---------- */
+const KEY = 'dotboard.v1';
+const PRESETS = [['NOIDA','Asia/Kolkata'],['NEW DELHI','Asia/Kolkata'],['MUMBAI','Asia/Kolkata'],['BENGALURU','Asia/Kolkata'],['DUBAI','Asia/Dubai'],['SINGAPORE','Asia/Singapore'],['HONG KONG','Asia/Hong_Kong'],['SHANGHAI','Asia/Shanghai'],['TOKYO','Asia/Tokyo'],['SEOUL','Asia/Seoul'],['SYDNEY','Australia/Sydney'],['AUCKLAND','Pacific/Auckland'],['LONDON','Europe/London'],['PARIS','Europe/Paris'],['BERLIN','Europe/Berlin'],['AMSTERDAM','Europe/Amsterdam'],['MADRID','Europe/Madrid'],['ISTANBUL','Europe/Istanbul'],['MOSCOW','Europe/Moscow'],['CAIRO','Africa/Cairo'],['NAIROBI','Africa/Nairobi'],['JOBURG','Africa/Johannesburg'],['NEW YORK','America/New_York'],['TORONTO','America/Toronto'],['CHICAGO','America/Chicago'],['DENVER','America/Denver'],['SAN FRAN','America/Los_Angeles'],['LA','America/Los_Angeles'],['MEXICO','America/Mexico_City'],['COLOMBIA','America/Bogota'],['BOGOTA','America/Bogota'],['MEDELLIN','America/Bogota'],['SAO PAULO','America/Sao_Paulo'],['HONOLULU','Pacific/Honolulu'],['UTC','UTC']];
+const DEFAULTS = {
+  skin:'amber', size:'L', h24:true, secs:true, flip:true,
+  cities:[{label:'NOIDA',tz:'Asia/Kolkata'},{label:'NEW YORK',tz:'America/New_York'},{label:'LONDON',tz:'Europe/London'},{label:'SAN FRAN',tz:'America/Los_Angeles'},{label:'COLOMBIA',tz:'America/Bogota'},{label:'DUBAI',tz:'Asia/Dubai'},{label:'TOKYO',tz:'Asia/Tokyo'}],
+  count:{label:'NEW YEAR 2027',at:'2027-01-01T00:00'},
+  sign:'HELLO\nTHERE\n\nSHIP IT TODAY\n\nSTAY CURIOUS ♥',
+  signEvery:10
+};
+let S;
+try { S = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(localStorage.getItem(KEY) || '{}')); }
+catch (e) { S = JSON.parse(JSON.stringify(DEFAULTS)); }
+if (!Array.isArray(S.cities)) S.cities = DEFAULTS.cities.slice();
+if (!S.count || typeof S.count !== 'object') S.count = {...DEFAULTS.count};
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+if (!S.addedCO) {
+  S.addedCO = true;
+  if (!S.cities.some(c => c.tz === 'America/Bogota')) {
+    if (S.cities.length >= 8) S.cities.pop();
+    const at = S.cities.findIndex(c => c.tz === 'America/Los_Angeles');
+    S.cities.splice(at >= 0 ? at + 1 : S.cities.length, 0, {label:'COLOMBIA', tz:'America/Bogota'});
+  }
+  save();
+}
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const canAnimate = () => S.flip && !reduced.matches && !document.hidden;
+const STEP = 58, MAXSTEPS = 5;
+const SIZE_MAX = {S:18, M:26, L:36, XL:52};
+
+/* ---------- drawing ---------- */
+function drawGlyph(cv, ch, w, h){
+  const ctx = cv.getContext('2d'); const d = cv.width / w;
+  ctx.setTransform(d,0,0,d,0,0); ctx.clearRect(0,0,w,h);
+  const bits = GLYPHS[ch] || GLYPHS['?'];
+  const pitch = Math.min(w * .7 / 5, h * .76 / 7);
+  const ox = (w - pitch*5)/2 + pitch/2, oy = (h - pitch*7)/2 + pitch/2, r = pitch * .35;
+  ctx.shadowBlur = 0; ctx.fillStyle = C.off; ctx.beginPath();
+  for (let i=0;i<35;i++) if (bits[i]==='0'){ const x=ox+(i%5)*pitch, y=oy+Math.floor(i/5)*pitch; ctx.moveTo(x+r,y); ctx.arc(x,y,r,0,6.2832); }
+  ctx.fill();
+  ctx.fillStyle = C.on; ctx.shadowColor = C.glow; ctx.shadowBlur = pitch * .9 * d; ctx.beginPath();
+  for (let i=0;i<35;i++) if (bits[i]==='1'){ const x=ox+(i%5)*pitch, y=oy+Math.floor(i/5)*pitch; ctx.moveTo(x+r,y); ctx.arc(x,y,r,0,6.2832); }
+  ctx.fill(); ctx.shadowBlur = 0;
+}
+function stepToward(c, t){
+  const n = ORDER.length, i = ORDER.indexOf(c), j = ORDER.indexOf(t);
+  if (i < 0 || j < 0) return t;
+  const dist = (j - i + n) % n;
+  return dist > MAXSTEPS ? ORDER[(j - MAXSTEPS + n) % n] : ORDER[(i + 1) % n];
+}
+
+class Cell {
+  constructor(){
+    this.el = document.createElement('div'); this.el.className = 'cell';
+    this.base = document.createElement('canvas'); this.base.className = 'base';
+    this.flap = document.createElement('div'); this.flap.className = 'flap'; this.flap.hidden = true;
+    this.fc = document.createElement('canvas'); this.flap.appendChild(this.fc);
+    this.el.append(this.base, this.flap);
+    this.ch = ' '; this.target = ' '; this.running = false; this.w = 0; this.h = 0;
+  }
+  resize(cw){
+    const w = cw, h = Math.round(cw * 1.45);
+    if (w === this.w && h === this.h) return;
+    this.w = w; this.h = h;
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    for (const c of [this.base, this.fc]) { c.width = Math.round(w*d); c.height = Math.round(h*d); }
+    this.redraw();
+  }
+  redraw(){ if (this.w) drawGlyph(this.base, this.ch, this.w, this.h); }
+  set(ch, delay=0){
+    ch = norm(ch);
+    if (ch === this.target) return;
+    this.target = ch;
+    if (!canAnimate() || !this.w) { this.ch = ch; this.redraw(); return; }
+    if (!this.running) { this.running = true; setTimeout(() => this.run(), delay); }
+  }
+  async run(){
+    let guard = 0;
+    while (this.ch !== this.target && guard++ < 40) {
+      if (!canAnimate() || !this.w) break;
+      const prev = this.ch, next = stepToward(prev, this.target);
+      drawGlyph(this.fc, prev, this.w, this.h);
+      this.ch = next; this.redraw(); this.flap.hidden = false;
+      try {
+        await this.flap.animate(
+          [{transform:'rotateX(0deg)',filter:'brightness(1)'},{transform:'rotateX(-90deg)',filter:'brightness(.45)'}],
+          {duration:STEP, easing:'cubic-bezier(.5,0,.9,.6)'}).finished;
+      } catch (e) {}
+      this.flap.hidden = true;
+    }
+    if (this.ch !== this.target) { this.ch = this.target; this.redraw(); }
+    this.running = false;
+  }
+}
+
+const BOARDS = new Set();
+class Board {
+  constructor(cols, rows, {scale=1, label=''} = {}){
+    this.cols = cols; this.rows = rows; this.scale = scale; this.label = label; this.cw = 0;
+    this.el = document.createElement('div'); this.el.className = 'board';
+    this.el.setAttribute('role','img'); this.el.style.setProperty('--cols', cols);
+    this.cells = []; this.lines = Array(rows).fill('');
+    for (let r=0;r<rows;r++){ const row=[]; for (let c=0;c<cols;c++){ const cell=new Cell(); row.push(cell); this.el.appendChild(cell.el);} this.cells.push(row); }
+    BOARDS.add(this);
+  }
+  setCw(cw){
+    cw = Math.max(6, Math.floor(cw));
+    if (cw === this.cw) return;
+    this.cw = cw;
+    this.el.style.setProperty('--cw', cw + 'px');
+    this.el.style.setProperty('--g', Math.max(2, Math.round(cw * .09)) + 'px');
+    for (const row of this.cells) for (const c of row) c.resize(cw);
+  }
+  setLine(r, str, align='left', stagger=24){
+    if (r >= this.rows) return;
+    const chars = Array.from(String(str || '').toUpperCase()).slice(0, this.cols);
+    const pad = this.cols - chars.length;
+    const left = align === 'center' ? Math.floor(pad/2) : align === 'right' ? pad : 0;
+    const full = Array(this.cols).fill(' ');
+    chars.forEach((ch,i) => full[left+i] = ch);
+    full.forEach((ch,c) => this.cells[r][c].set(ch, c*stagger));
+    this.lines[r] = full.join('').trim();
+    this.el.setAttribute('aria-label', (this.label ? this.label + ': ' : '') + this.lines.filter(Boolean).join(', '));
+  }
+  redraw(){ for (const row of this.cells) for (const c of row) c.redraw(); }
+  destroy(){ BOARDS.delete(this); this.el.remove(); }
+}
+
+/* ---------- panels ---------- */
+const desk = document.getElementById('desk');
+const PANELS = [];
+function makePanel(id, title, wide){
+  const el = document.createElement('section');
+  el.className = 'panel' + (wide ? ' wide' : '');
+  el.innerHTML = `<div class="phead"><span class="plabel"><b>${title}</b><span class="pmeta"></span></span><button class="pbtn" type="button">Full screen</button></div><div class="pbody"></div>`;
+  const p = {id, el, title, body:el.querySelector('.pbody'), meta:el.querySelector('.pmeta'), btn:el.querySelector('.pbtn'), boards:[], extra:0, raf:0};
+  p.btn.setAttribute('aria-label', 'Show ' + title + ' full screen');
+  p.btn.addEventListener('click', () => toggleFocus(p));
+  el.addEventListener('dblclick', e => { if (!e.target.closest('button')) toggleFocus(p); });
+  desk.appendChild(el);
+  new ResizeObserver(() => schedFit(p)).observe(p.body);
+  PANELS.push(p);
+  return p;
+}
+function schedFit(p){ if (p.raf) return; p.raf = requestAnimationFrame(() => { p.raf = 0; fitPanel(p); }); }
+function fitPanel(p){
+  const W = p.body.clientWidth;
+  if (!W || !p.boards.length) return;
+  const focus = p.el.classList.contains('focused');
+  let base = focus ? Infinity : SIZE_MAX[S.size] || 36;
+  for (const b of p.boards) base = Math.min(base, (W * .995) / ((b.cols + .09*(b.cols+2)) * b.scale));
+  if (focus) {
+    const H = window.innerHeight - 110 - 12*(p.boards.length - 1 + p.extra);
+    let units = 0;
+    for (const b of p.boards) units += (1.45*b.rows + .09*(b.rows+2)) * b.scale;
+    base = Math.min(base, H / units);
+  }
+  for (const b of p.boards) b.setCw(base * b.scale);
+}
+const fitAll = () => PANELS.forEach(fitPanel);
+
+const pad2 = n => String(n).padStart(2,'0');
+const DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+/* World board */
+const world = makePanel('world','World board',true);
+const fmtCache = {};
+function fmt(tz){
+  const k = tz + (S.h24 ? 24 : 12);
+  if (!fmtCache[k]) fmtCache[k] = {
+    t: new Intl.DateTimeFormat(S.h24 ? 'en-GB' : 'en-US', S.h24 ? {timeZone:tz,hour:'2-digit',minute:'2-digit',hourCycle:'h23'} : {timeZone:tz,hour:'numeric',minute:'2-digit',hour12:true}),
+    d: new Intl.DateTimeFormat('en-US', {timeZone:tz, weekday:'short'})
+  };
+  return fmtCache[k];
+}
+function buildWorld(){
+  world.boards.forEach(b => b.destroy());
+  const b = new Board(20, Math.max(1, S.cities.length), {label:'World board'});
+  world.boards = [b]; world.body.replaceChildren(b.el);
+  fitPanel(world); renderWorld(new Date());
+}
+function renderWorld(now){
+  const b = world.boards[0];
+  if (!S.cities.length) { b.setLine(0, 'ADD A CITY', 'center'); world.meta.textContent = ''; return; }
+  S.cities.forEach((c,i) => {
+    let t = '--:--', d = '---';
+    try { const f = fmt(c.tz); t = f.t.format(now); if (!S.h24) t = t.replace(/\s?([AP])M/i, '$1'); d = f.d.format(now).toUpperCase().slice(0,3); } catch (e) {}
+    const name = Array.from(String(c.label || '').toUpperCase()).slice(0,10).join('').padEnd(10);
+    b.setLine(i, name + t.padStart(6) + ' ' + d);
+  });
+  world.meta.textContent = S.cities.length + (S.cities.length === 1 ? ' city' : ' cities');
+}
+
+/* Clock */
+const clock = makePanel('clock','Clock');
+function buildClock(){
+  clock.boards.forEach(b => b.destroy());
+  const big = new Board(S.secs ? 8 : 5, 1, {scale:2.2, label:'Time'});
+  const date = new Board(15, 1, {label:'Date'});
+  clock.boards = [big, date]; clock.body.replaceChildren(big.el, date.el);
+  fitPanel(clock); renderClock(new Date());
+}
+function renderClock(now){
+  const [big, date] = clock.boards;
+  let h = now.getHours(), ap = '';
+  if (!S.h24) { ap = h < 12 ? 'AM' : 'PM'; h = h % 12 || 12; }
+  const hh = S.h24 ? pad2(h) : String(h).padStart(2,' ');
+  big.setLine(0, hh + ':' + pad2(now.getMinutes()) + (S.secs ? ':' + pad2(now.getSeconds()) : ''), 'left', 30);
+  const ds = DOW[now.getDay()] + ' ' + pad2(now.getDate()) + ' ' + MON[now.getMonth()];
+  date.setLine(0, S.h24 ? ds + ' ' + now.getFullYear() : ds + '   ' + ap, 'center');
+}
+try { clock.meta.textContent = Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g,' '); } catch (e) {}
+
+/* Countdown + year */
+const count = makePanel('count','Countdown');
+count.extra = 1;
+(() => {
+  const lbl = new Board(16,1,{label:'Countdown to'}), cnt = new Board(13,1,{scale:1.2,label:'Time left'});
+  const plbl = new Board(16,1,{label:'Year progress'}), bar = new Board(16,1,{label:'Year bar'});
+  const sep = document.createElement('hr'); sep.className = 'sep';
+  count.boards = [lbl, cnt, plbl, bar];
+  count.body.append(lbl.el, cnt.el, sep, plbl.el, bar.el);
+})();
+function renderCount(now){
+  const [lbl, cnt, plbl, bar] = count.boards;
+  const at = new Date(S.count.at);
+  let label = S.count.label || 'COUNTDOWN';
+  if (isNaN(at)) { lbl.setLine(0, label, 'center'); cnt.setLine(0, 'SET A DATE', 'center'); count.meta.textContent = ''; }
+  else {
+    let diff = at - now;
+    lbl.setLine(0, label, 'center');
+    if (diff <= 0) cnt.setLine(0, "IT'S TIME!", 'center');
+    else {
+      const s = Math.floor(diff/1000), days = Math.min(999, Math.floor(s/86400));
+      cnt.setLine(0, String(days).padStart(3,' ') + 'D ' + pad2(Math.floor(s%86400/3600)) + ':' + pad2(Math.floor(s%3600/60)) + ':' + pad2(s%60), 'left', 30);
+    }
+    count.meta.textContent = at.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
+  }
+  const y = now.getFullYear(), start = new Date(y,0,1), end = new Date(y+1,0,1);
+  const p = (now - start) / (end - start), pct = (p*100).toFixed(1) + '%';
+  plbl.setLine(0, ('YEAR ' + y).padEnd(16 - pct.length) + pct);
+  const filled = Math.round(p * 16);
+  bar.setLine(0, '█'.repeat(filled) + '·'.repeat(16 - filled), 'left', 30);
+}
+
+/* Sign */
+const sign = makePanel('sign','Sign',true);
+(() => { const b = new Board(16,3,{scale:1.25,label:'Sign'}); sign.boards = [b]; sign.body.append(b.el); })();
+let signIdx = 0, signSwap = Date.now();
+function wrapLines(text){
+  const out = [];
+  for (const raw of text.split('\n')) {
+    let line = '';
+    for (const w of raw.trim().split(/\s+/).filter(Boolean)) {
+      if (!line) line = w.slice(0,16);
+      else if ((line + ' ' + w).length <= 16) line += ' ' + w;
+      else { out.push(line); line = w.slice(0,16); }
+    }
+    if (line) out.push(line);
+  }
+  return out.slice(0,3);
+}
+function signMessages(){ const m = String(S.sign || '').split(/\n\s*\n/).map(wrapLines).filter(l => l.length); return m.length ? m : [['']]; }
+function renderSign(){
+  const msgs = signMessages(); signIdx %= msgs.length;
+  const lines = msgs[signIdx], start = Math.floor((3 - lines.length)/2);
+  for (let r=0;r<3;r++) sign.boards[0].setLine(r, lines[r - start] || '', 'center', 28);
+  sign.meta.textContent = msgs.length > 1 ? 'Message ' + (signIdx+1) + ' of ' + msgs.length : '';
+}
+
+/* Wordmark */
+const mark = new Board(8,1,{label:'Dotboard'});
+document.getElementById('mark').appendChild(mark.el);
+mark.setCw(15);
+
+/* ---------- skin + loop ---------- */
+function applySkin(){
+  C = SKINS[S.skin] || SKINS.amber;
+  const st = document.documentElement.style;
+  for (const k of ['page','bezel','well','face','on','off','ui','muted','line']) st.setProperty('--' + k, C[k]);
+  st.colorScheme = C.light ? 'light' : 'dark';
+  BOARDS.forEach(b => b.redraw());
+}
+
+let lastSec = -1;
+function tick(){
+  const now = new Date(), sec = Math.floor(now / 1000);
+  if (sec === lastSec) return;
+  lastSec = sec;
+  renderWorld(now); renderClock(now); renderCount(now);
+  if (S.signEvery > 0 && signMessages().length > 1 && Date.now() - signSwap >= S.signEvery * 1000) {
+    signSwap = Date.now(); signIdx++; renderSign();
+  }
+}
+
+/* ---------- focus mode ---------- */
+let focused = null, wake = null;
+async function requestWake(){ try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {} }
+function toggleFocus(p){
+  if (focused === p) { exitFocus(); return; }
+  if (focused) { focused.el.classList.remove('focused'); focused.btn.textContent = 'Full screen'; }
+  focused = p;
+  p.el.classList.add('focused'); document.body.classList.add('focusing');
+  p.btn.textContent = 'Exit';
+  try { const r = document.documentElement.requestFullscreen?.(); r && r.catch(() => {}); } catch (e) {}
+  requestWake();
+  requestAnimationFrame(() => fitPanel(p));
+}
+function exitFocus(){
+  if (!focused) return;
+  const p = focused; focused = null;
+  p.el.classList.remove('focused'); document.body.classList.remove('focusing');
+  p.btn.textContent = 'Full screen';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  try { wake && wake.release(); } catch (e) {} wake = null;
+  requestAnimationFrame(fitAll);
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && focused) exitFocus(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && focused) requestWake(); });
+window.addEventListener('resize', () => PANELS.forEach(schedFit));
+
+/* ---------- settings drawer ---------- */
+const $ = id => document.getElementById(id);
+const drawer = $('drawer'), scrim = $('scrim');
+let opener = null;
+function openDrawer(){ opener = document.activeElement; drawer.inert = false; drawer.classList.add('open'); scrim.hidden = false; $('closeSettings').focus(); }
+function closeDrawer(){ drawer.classList.remove('open'); drawer.inert = true; scrim.hidden = true; opener && opener.focus && opener.focus(); }
+$('openSettings').addEventListener('click', openDrawer);
+$('closeSettings').addEventListener('click', closeDrawer);
+scrim.addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (drawer.classList.contains('open')) closeDrawer(); else exitFocus();
+});
+
+const skinsEl = $('skins');
+for (const [k, s] of Object.entries(SKINS)) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'swatch'; b.dataset.k = k;
+  b.style.setProperty('--sw-face', s.face); b.style.setProperty('--sw-on', s.on); b.style.setProperty('--sw-glow', s.glow);
+  b.innerHTML = '<i></i>' + s.name;
+  b.addEventListener('click', () => { S.skin = k; save(); applySkin(); syncSkins(); });
+  skinsEl.appendChild(b);
+}
+function syncSkins(){ skinsEl.querySelectorAll('.swatch').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === S.skin))); }
+
+const sizesEl = $('sizes');
+for (const k of Object.keys(SIZE_MAX)) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = k; b.dataset.k = k;
+  b.addEventListener('click', () => { S.size = k; save(); syncSizes(); fitAll(); });
+  sizesEl.appendChild(b);
+}
+function syncSizes(){ sizesEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === S.size))); }
+
+$('h24').checked = S.h24; $('secs').checked = S.secs; $('flip').checked = S.flip;
+$('h24').addEventListener('change', e => { S.h24 = e.target.checked; save(); lastSec = -1; tick(); });
+$('secs').addEventListener('change', e => { S.secs = e.target.checked; save(); buildClock(); });
+$('flip').addEventListener('change', e => { S.flip = e.target.checked; save(); });
+
+const pick = $('cityPick');
+PRESETS.forEach(([label, tz], i) => {
+  const o = document.createElement('option'); o.value = i;
+  o.textContent = label.charAt(0) + label.slice(1).toLowerCase() + '  ·  ' + tz.replace(/_/g,' ');
+  pick.appendChild(o);
+});
+function renderCityList(){
+  const ul = $('cityList'); ul.replaceChildren();
+  S.cities.forEach((c, i) => {
+    const li = document.createElement('li');
+    const inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 10; inp.value = c.label; inp.id = 'city' + i;
+    inp.setAttribute('aria-label', 'Name for ' + c.tz);
+    inp.addEventListener('input', () => { c.label = inp.value; save(); renderWorld(new Date()); });
+    const tz = document.createElement('span'); tz.className = 'tz'; tz.textContent = c.tz.split('/').pop().replace(/_/g,' ');
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×';
+    x.setAttribute('aria-label', 'Remove ' + (c.label || c.tz));
+    x.addEventListener('click', () => { S.cities.splice(i,1); save(); renderCityList(); buildWorld(); });
+    li.append(inp, tz, x); ul.appendChild(li);
+  });
+  $('addCity').disabled = S.cities.length >= 8;
+}
+$('addCity').addEventListener('click', () => {
+  if (S.cities.length >= 8) return;
+  const [label, tz] = PRESETS[+pick.value];
+  S.cities.push({label, tz}); save(); renderCityList(); buildWorld();
+});
+
+$('cdLabel').value = S.count.label || '';
+$('cdAt').value = S.count.at || '';
+$('cdLabel').addEventListener('input', e => { S.count.label = e.target.value; save(); renderCount(new Date()); });
+$('cdAt').addEventListener('change', e => { S.count.at = e.target.value; save(); renderCount(new Date()); });
+
+$('signText').value = S.sign;
+$('signText').addEventListener('input', e => { S.sign = e.target.value; save(); signIdx = 0; signSwap = Date.now(); renderSign(); });
+$('signEvery').value = String(S.signEvery);
+$('signEvery').addEventListener('change', e => { S.signEvery = +e.target.value; save(); signSwap = Date.now(); });
+
+/* ---------- boot ---------- */
+applySkin(); syncSkins(); syncSizes(); renderCityList();
+buildWorld(); buildClock(); fitAll();
+renderCount(new Date()); renderSign();
+setTimeout(() => mark.setLine(0, 'DOTBOARD', 'left', 70), 250);
+setInterval(tick, 200);
+})();
+</script>
+
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
+</body>
+</html>
